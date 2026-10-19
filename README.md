@@ -16,7 +16,7 @@ npm run dev
 
 GitHub 저장소는 `https://github.com/pipeCHeck/261019_power0802m_com`, 운영 브랜치는 `master`입니다. 이 브랜치에 **push**하면 Workers Builds가 배포하도록 연결합니다.
 
-`wrangler.jsonc`의 Worker 이름은 `power0802m`, 파일 경로는 `./public`입니다. Workers Static Assets로 HTML·CSS·JS·폰트를 제공하며 별도의 서버 코드나 사이트 빌드는 필요하지 않습니다. 기존 `_headers`의 응답 헤더와 캐시 설정도 사용합니다.
+`wrangler.jsonc`의 Worker 이름은 `power0802m-com`, 파일 경로는 `./public`입니다. 운영 주소는 `https://power0802m.com`이며 Custom Domain 경로를 설정 파일에도 기록했습니다. 운영 `workers.dev` 주소는 대시보드의 현재 설정에 맞춰 비활성화했습니다. Workers Static Assets로 HTML·CSS·JS·폰트를 제공하며 별도의 서버 코드나 사이트 빌드는 필요하지 않습니다. 기존 `_headers`의 응답 헤더와 캐시 설정도 사용합니다.
 
 1. Cloudflare의 **Workers & Pages → Create application**에서 **GitHub 저장소 연결 / Import a repository**로 새 **Worker**를 만듭니다.
 2. `pipeCHeck/261019_power0802m_com`을 선택합니다. GitHub 앱 권한에 해당 저장소가 포함되어 있어야 합니다.
@@ -24,15 +24,15 @@ GitHub 저장소는 `https://github.com/pipeCHeck/261019_power0802m_com`, 운영
 
    | 설정 | 값 |
    | --- | --- |
-   | Worker 이름 | `power0802m`（Wrangler 설정과 동일） |
+   | Worker 이름 | `power0802m-com`（Wrangler 설정과 동일） |
    | 운영 브랜치 | `master` |
    | Build command | 비워 두기 |
    | Deploy command | `npm run deploy` |
    | Root directory | 기본값, 저장소 루트 |
    | Node.js | 22 이상（필요 시 빌드 환경 변수 `NODE_VERSION=24`） |
 
-4. 첫 배포가 끝나면 반환된 `*.workers.dev` 주소에서 사이트를 확인합니다.
-5. Worker의 **Settings → Domains & Routes → Add → Custom Domain**에서 `power0802m.com`을 연결합니다. 도메인은 같은 Cloudflare 계정에 있어야 합니다. `www`도 사용할 경우 별도로 추가합니다.
+4. 배포 후 운영 주소 `https://power0802m.com`에서 사이트를 확인합니다.
+5. `power0802m.com`은 Wrangler의 Custom Domain 설정으로 연결·유지합니다. 도메인은 같은 Cloudflare 계정에 있어야 합니다. 대시보드에서 확인할 때는 Worker의 **Settings → Domains & Routes**를 엽니다. `www`도 사용할 경우 별도로 추가합니다.
 6. Worker와 도메인의 정상 동작을 확인한 후 기존 Pages 프로젝트를 정리할 수 있습니다.
 
 이후에는 다음 흐름으로 사이트가 갱신됩니다.
