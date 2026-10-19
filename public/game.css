@@ -1,0 +1,84 @@
+body { touch-action: pinch-zoom; }
+html.game-sizing, html.game-sizing * { user-select: none; }
+
+.game-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.game-ball {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 10;
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  /* A white difference layer reverses the real pixels beneath the ball. */
+  mix-blend-mode: difference;
+  pointer-events: none;
+}
+
+.ball-shape { display: block; width: 100%; height: 100%; overflow: visible; }
+.game-ball { --ball-ink: #fff; }
+.ball-shape path { fill: var(--ball-ink); stroke: none; }
+/* Screen over the inverted pixels; inks compensate for the #f8f7f3 paper. */
+.game-ball-tint { mix-blend-mode: screen; }
+.game-ball-tint[data-shape="circle"] { display: none; }
+.game-ball-tint[data-shape="heart"] { --ball-ink: #fa475f; }
+.game-ball-tint[data-shape="star"] { --ball-ink: #face2a; }
+/* Cover the inversion layer's antialiased edge with matching color. */
+.game-ball-tint[data-mode="playing"] .ball-shape path {
+  stroke: var(--ball-ink);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+.game-ball[data-mode="sizing"] .ball-shape path {
+  fill: none;
+  stroke: var(--ball-ink);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.game-score {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 11;
+  width: 96px;
+  height: 25px;
+  pointer-events: none;
+  user-select: none;
+  font-family: "SB Aggro Light", sans-serif;
+  font-weight: 400;
+  font-size: 15px;
+  line-height: 25px;
+  color: #fff;
+  mix-blend-mode: difference;
+  font-variant-numeric: tabular-nums;
+}
+
+.score-window { display: grid; height: 100%; overflow: hidden; }
+/* Keep the two score colors disjoint so glyph antialiasing is applied once. */
+#game-score {
+  mask: url(#score-ball-outside-mask);
+  mask-mode: luminance;
+}
+.game-score-on-ball {
+  z-index: 12;
+  color: #f8f7f3;
+  mix-blend-mode: normal;
+  clip-path: url(#score-ball-clip);
+}
+.game-clip-defs { position: absolute; pointer-events: none; }
+.score-line { grid-area: 1 / 1; display: block; white-space: nowrap; }
+.score-line.is-entering { animation: message-enter 650ms cubic-bezier(.76, 0, .24, 1) both; }
+.score-line.is-leaving { animation: message-leave 650ms cubic-bezier(.76, 0, .24, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .score-line.is-entering, .score-line.is-leaving { animation: none; }
+}
