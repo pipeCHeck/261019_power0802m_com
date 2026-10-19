@@ -14,6 +14,7 @@ class ScoreTicker {
   get duration() { return this.motionPreference.matches ? 0 : 650; }
 
   show(value, ending = false) {
+    this.ending = ending;
     this.previewing = false;
     this.hiding = false;
     window.clearTimeout(this.transitionTimer);
@@ -49,6 +50,7 @@ class ScoreTicker {
   }
 
   hide() {
+    this.ending = false;
     this.previewing = false;
     window.clearTimeout(this.transitionTimer);
     window.clearTimeout(this.hideTimer);
@@ -83,7 +85,7 @@ class ScoreTicker {
       line.className = "score-line is-current";
       this.window.replaceChildren(line);
     }
-    if (this.root.dataset.value === "GG") {
+    if (this.ending) {
       this.hideTimer = window.setTimeout(() => this.hide(), 1000);
     }
   }
@@ -255,7 +257,8 @@ function initGame() {
     lastTime = time;
     if (game.step(seconds)) {
       canvas.dataset.state = "ended";
-      ticker.show("GG", true);
+      const ending = { heart: "LOVE", star: "STAR" }[game.ball.shape] ?? "GG";
+      ticker.show(ending, true);
       status.textContent = `게임 종료. ${game.score}점. 빈 곳을 클릭하면 다시 시작합니다.`;
     }
     for (const effect of effects) effect.age += seconds;
