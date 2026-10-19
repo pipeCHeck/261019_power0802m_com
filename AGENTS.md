@@ -1,5 +1,6 @@
 # Project instructions
 
+- Commit completed changes locally only. Do not push, trigger a remote build, or publish a deployment unless the user explicitly asks for that action. Ordinary website change requests authorize local edits and commits, not deployment. A push to `master` triggers Cloudflare production deployment.
 - Deploy this site with Cloudflare Workers using `wrangler.jsonc` and Workers Builds. The Worker name is `power0802m-com`, the static asset directory is `public`, and the production Git branch is `master`. Keep the dashboard Worker name aligned with the Wrangler name. The production Custom Domain is `power0802m.com`; retain its route and the disabled production `workers.dev` setting in Wrangler.
 - Run `npm run deploy:check` for deployment configuration changes. Never commit credentials or `.dev.vars` files.
 - Keep the footer email as plain text; do not turn it into a mail link.
