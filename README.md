@@ -4,7 +4,7 @@
 
 ## 미리 보기
 
-Node.js 20 이상에서 실행하세요. 패키지 설치는 필요 없습니다.
+Node.js 22 이상에서 실행하세요. 간단한 파일 미리보기에는 패키지 설치가 필요 없습니다.
 
 ```sh
 npm run dev
@@ -12,49 +12,48 @@ npm run dev
 
 브라우저에서 http://127.0.0.1:5173 을 엽니다. 종료는 터미널에서 `Ctrl+C`입니다.
 
-## Cloudflare Pages + Git 자동 배포
+## Cloudflare Workers + Git 자동 배포
 
-로컬 커밋만으로는 배포되지 않습니다. GitHub 또는 GitLab 원격 저장소의 운영 브랜치에 **push**하면 Cloudflare Pages가 배포합니다.
+GitHub 저장소는 `https://github.com/pipeCHeck/261019_power0802m_com`, 운영 브랜치는 `master`입니다. 이 브랜치에 **push**하면 Workers Builds가 배포하도록 연결합니다.
 
-1. GitHub/GitLab에 새 저장소를 만들고 이 프로젝트를 업로드합니다. 아래 `YOUR_ACCOUNT`를 자신의 계정명으로 바꾸세요. `origin`이 아직 없을 때 한 번만 추가합니다.
+`wrangler.jsonc`의 Worker 이름은 `power0802m`, 파일 경로는 `./public`입니다. Workers Static Assets로 HTML·CSS·JS·폰트를 제공하며 별도의 서버 코드나 사이트 빌드는 필요하지 않습니다. 기존 `_headers`의 응답 헤더와 캐시 설정도 사용합니다.
 
-   ```sh
-   git add .
-   git commit -m "Create animated coming-soon page"
-   git branch -M main
-   git remote add origin https://github.com/YOUR_ACCOUNT/power0802m.com.git
-   git push -u origin main
-   ```
-
-   이미 커밋이 있다면 첫 커밋 명령은 생략합니다. 다른 브랜치를 운영 브랜치로 써도 됩니다.
-
-2. Cloudflare 대시보드의 **Workers & Pages**에서 **Pages** 프로젝트를 만들고 **기존 Git 저장소 가져오기 / Git 연결** 방식을 선택합니다. 파일 직접 업로드 대신 Git 연동 프로젝트로 시작합니다.
-3. 저장소를 선택하고 다음처럼 설정합니다.
+1. Cloudflare의 **Workers & Pages → Create application**에서 **GitHub 저장소 연결 / Import a repository**로 새 **Worker**를 만듭니다.
+2. `pipeCHeck/261019_power0802m_com`을 선택합니다. GitHub 앱 권한에 해당 저장소가 포함되어 있어야 합니다.
+3. 다음 값으로 설정합니다.
 
    | 설정 | 값 |
    | --- | --- |
-   | 프로젝트 이름 | `power0802m` 또는 사용 가능한 이름 |
-   | 운영 브랜치 | `main` 또는 실제 운영 브랜치 |
-   | Framework preset | `None` |
+   | Worker 이름 | `power0802m`（Wrangler 설정과 동일） |
+   | 운영 브랜치 | `master` |
    | Build command | 비워 두기 |
-   | Build output directory | `public` |
+   | Deploy command | `npm run deploy` |
    | Root directory | 기본값, 저장소 루트 |
+   | Node.js | 22 이상（필요 시 빌드 환경 변수 `NODE_VERSION=24`） |
 
-   Workers 배포 화면이 아니라 **Pages** 프로젝트 화면인지 확인합니다. 이 프로젝트에는 Worker나 Wrangler 배포 명령이 필요 없습니다.
-
-4. 첫 배포가 끝나면 반환된 `*.pages.dev` 주소에서 확인합니다.
-5. Pages 프로젝트의 **Custom domains → Set up a domain**에서 `power0802m.com`을 추가합니다. 루트 도메인을 사용하려면 같은 Cloudflare 계정에 도메인을 추가하고, 도메인 등록 업체에서 Cloudflare가 안내한 네임서버로 설정해야 합니다. 이미 Cloudflare 네임서버를 사용 중이라면 이 변경은 필요 없습니다. 기존 DNS 레코드, 특히 메일 레코드는 보존하세요.
-6. 필요하면 `www.power0802m.com`도 Custom domains에 추가합니다. DNS에 CNAME만 직접 추가하지 말고 먼저 Pages의 도메인 연결 절차를 진행하세요. HTTPS 인증서 활성화 후 접속을 확인합니다.
+4. 첫 배포가 끝나면 반환된 `*.workers.dev` 주소에서 사이트를 확인합니다.
+5. Worker의 **Settings → Domains & Routes → Add → Custom Domain**에서 `power0802m.com`을 연결합니다. 도메인은 같은 Cloudflare 계정에 있어야 합니다. `www`도 사용할 경우 별도로 추가합니다.
+6. Worker와 도메인의 정상 동작을 확인한 후 기존 Pages 프로젝트를 정리할 수 있습니다.
 
 이후에는 다음 흐름으로 사이트가 갱신됩니다.
 
 ```sh
-git add public
+git add public package.json package-lock.json wrangler.jsonc
 git commit -m "Update coming-soon page"
 git push
 ```
 
-Cloudflare Pages의 Deployments에서 해당 커밋의 배포 성공을 확인합니다. 이 폴더만 만든 상태에서는 원격 저장소·Cloudflare 계정·DNS가 자동으로 연결되지 않습니다.
+Worker의 Builds/Deployments에서 해당 커밋의 배포 성공을 확인합니다. 최초 Workers Builds 연결과 사용자 도메인 연결은 Cloudflare 계정에서 진행해야 합니다.
+
+Workers 환경으로 미리 보거나 배포 설정을 검사할 때는 아래 명령을 사용합니다. 직접 배포하는 `npm run deploy`에는 Cloudflare 인증이 필요합니다.
+
+```sh
+npm ci
+npm run deploy:check
+npm run preview:worker
+```
+
+Workers 미리보기 주소는 `http://127.0.0.1:8787`입니다. `deploy:check`는 실제 공개 배포를 하지 않습니다.
 
 ## 수정할 파일
 
@@ -63,7 +62,8 @@ Cloudflare Pages의 Deployments에서 해당 커밋의 배포 성공을 확인�
 - `public/app.js`: 문구 유지 시간(2400ms), 전환 시간(650ms), 점 애니메이션 간격(550 / 1.5 ≈ 366.7ms)
 - `public/favicon.svg`: 브라우저 탭 아이콘
 - `public/fonts/sb-aggro-light.ttf`: 사용자가 제공한 SB 어그로 L 폰트. 중앙 전환 문구 및 크기·점수·GG 표시에 웹폰트로 적용
-- `public/_headers`: Cloudflare Pages 응답 헤더와 캐시 재검증
+- `public/_headers`: Cloudflare Workers Static Assets 응답 헤더와 캐시 재검증
+- `wrangler.jsonc`: Workers 이름, 호환성 날짜, 정적 파일 경로
 - `public/game-physics.mjs`: 공의 중력·반사·타격 방향·점수 판정
 - `public/ball-shapes.mjs`: 원·하트·별의 모양 및 생성 확률
 - `public/game.js`, `public/game.css`: 공 크기 드래그, 커서 점수·색 반전, 불투명한 별 모양 클릭 효과·10점 폭죽
@@ -74,7 +74,7 @@ Cloudflare Pages의 Deployments에서 해당 커밋의 배포 성공을 확인�
 
 ## 사이트 버전
 
-사이트 수정 요청 하나를 완료할 때마다 `npm run version:bump`를 한 번 실행합니다. `package.json`과 하단 표시의 마지막 숫자가 함께 올라갑니다(예: v0.0.1 → v0.0.2). 중간 저장이나 미리보기 열기에는 버전을 올리지 않습니다. 이후 작업에서도 이 규칙을 따르도록 `AGENTS.md`에 기록했습니다. 배포할 때는 수정한 `public`과 `package.json`을 함께 커밋하세요.
+사이트 수정 요청 하나를 완료할 때마다 `npm run version:bump`를 한 번 실행합니다. `package.json`, `package-lock.json`, 하단 표시의 마지막 숫자가 함께 올라갑니다(예: v0.0.1 → v0.0.2). 중간 저장이나 미리보기 열기에는 버전을 올리지 않습니다. 이후 작업에서도 이 규칙을 따르도록 `AGENTS.md`에 기록했습니다. 배포할 때는 수정한 `public`, `package.json`, `package-lock.json`을 함께 커밋하세요.
 
 ## 공 살려두기
 
@@ -92,6 +92,6 @@ Cloudflare Pages의 Deployments에서 해당 커밋의 배포 성공을 확인�
 
 ## 공식 문서
 
-- [Cloudflare Pages Git 연동](https://developers.cloudflare.com/pages/configuration/git-integration/)
-- [정적 HTML 배포](https://developers.cloudflare.com/pages/framework-guides/deploy-anything/)
-- [사용자 도메인 연결](https://developers.cloudflare.com/pages/configuration/custom-domains/)
+- [Workers Static Assets](https://developers.cloudflare.com/workers/static-assets/)
+- [Workers Builds 설정](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/)
+- [Workers 사용자 도메인](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/)

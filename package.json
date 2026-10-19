@@ -1,16 +1,22 @@
 {
   "name": "power0802m-coming-soon",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "private": true,
   "type": "module",
   "description": "A small animated coming-soon page for power0802m.com",
   "scripts": {
     "dev": "node scripts/serve.mjs",
     "start": "node scripts/serve.mjs",
+    "preview:worker": "wrangler dev --port 8787",
+    "deploy": "wrangler deploy",
+    "deploy:check": "wrangler deploy --dry-run",
     "test": "node --test",
     "version:bump": "node scripts/bump-version.mjs"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "wrangler": "4.151.1"
   }
 }
