@@ -65,7 +65,8 @@ export class PhysicsCard {
       // carry the plate through balance before each swing loses energy.
       // The same torque/damping applies while the hand moves or stays still.
       const gripDamping = Math.max(.85, .6 * pendulumFrequency);
-      this.drag = { localX, localY, x, y, previousX: x, previousY: y, pivotX: x, pivotY: y, vx: 0, vy: 0, gripDamping };
+      this.drag = { localX, localY, x, y, previousX: x, previousY: y, pivotX: x, pivotY: y,
+        vx: 0, vy: 0, curveVX: 0, curveVY: 0, turnRate: 0, motionX: x, motionY: y, gripDamping };
       this.wake();
       return true;
     }
@@ -176,12 +177,36 @@ export class PhysicsCard {
         const vy = drag.vy + (clamp((pointerY - drag.pivotY) / dt, -2800, 2800) - drag.vy) * blend;
         const ax = clamp((vx - drag.vx) / dt, -60000, 60000);
         const ay = clamp((vy - drag.vy) / dt, -60000, 60000);
+        // Signed curvature of the moving hand drives a bounded turning torque.
+        // Regularize low speeds and smooth direction changes so small deliberate
+        // circles work, while cursor jitter and straight reversals do not spin it.
+        // Only the assist uses this slower direction signal; the material point
+        // and inertial torque still follow the original, immediate hand motion.
+        const curveBlend = 1 - Math.exp(-dt / .06);
+        const curveVX = drag.curveVX + (vx - drag.curveVX) * curveBlend;
+        const curveVY = drag.curveVY + (vy - drag.curveVY) * curveBlend;
+        const speedSquared = curveVX * curveVX + curveVY * curveVY;
+        const turnRate = (drag.curveVX * curveVY - drag.curveVY * curveVX) / (dt * (speedSquared + 80 ** 2));
+        drag.curveVX = curveVX; drag.curveVY = curveVY;
+        // Average before limiting: sparse pointer events concentrate direction
+        // changes into brief peaks that should carry the same turning impulse.
+        drag.turnRate = clamp(drag.turnRate + (turnRate - drag.turnRate) * (1 - Math.exp(-dt / .04)), -12, 12);
+        const motionBlend = 1 - Math.exp(-dt / .08);
+        drag.motionX += (pointerX - drag.motionX) * motionBlend;
+        drag.motionY += (pointerY - drag.motionY) * motionBlend;
+        // Speed alone cannot distinguish a tiny fast jitter from a deliberate
+        // arc. Require a few pixels of recent spatial movement as well.
+        const arcStrength = clamp((Math.hypot(pointerX - drag.motionX, pointerY - drag.motionY) - 1) / 3, 0, 1);
         drag.vx = vx; drag.vy = vy;
         const c = Math.cos(b.angle), s = Math.sin(b.angle);
         const rx = c * drag.localX - s * drag.localY;
         const ry = s * drag.localX + c * drag.localY;
         const torque = -rx * (GRAVITY - ay) - ry * ax;
         b.angularVelocity += torque / (this.inertia + rx * rx + ry * ry) * dt;
+        const turnStrength = arcStrength * clamp((Math.abs(drag.turnRate) - 1) / 1.5, 0, 1)
+          * speedSquared / (speedSquared + 80 ** 2);
+        b.angularVelocity += (clamp(drag.turnRate * 1.3, -10, 10) - b.angularVelocity)
+          * (1 - Math.exp(-8 * turnStrength * dt));
         b.angularVelocity *= Math.exp(-drag.gripDamping * dt);
         b.angularVelocity = clamp(b.angularVelocity, -12, 12);
         b.angle = this.constrainPinnedAngle(b.angle + b.angularVelocity * dt, pointerY);

@@ -9,6 +9,23 @@ function point(body, x, y) {
 }
 function near(actual, expected) { assert.ok(Math.abs(actual - expected) < .001, `${actual} != ${expected}`); }
 
+function circleDrag(model, grab, { direction = 1, radius = 14, turns = 3, samples = 72 } = {}) {
+  let rotation = 0, previous = model.body.angle;
+  for (let i = 1; i <= samples * turns; i++) {
+    const phase = direction * i / samples * Math.PI * 2;
+    const x = grab.x + radius * (Math.cos(phase) - 1);
+    const y = grab.y + radius * Math.sin(phase);
+    model.moveDrag(x, y);
+    model.step(.6 / samples);
+    rotation += Math.atan2(Math.sin(model.body.angle - previous), Math.cos(model.body.angle - previous));
+    previous = model.body.angle;
+    const held = point(model.body, model.drag.localX, model.drag.localY);
+    near(held.x, x); near(held.y, y);
+    assert.ok(Math.abs(model.body.angularVelocity) <= 12);
+  }
+  return rotation;
+}
+
 test("the card falls under gravity and its rotated corners stay above the floor", () => {
   const model = make();
   const y = model.body.y;
@@ -365,4 +382,126 @@ test("a sliding plate loses momentum gradually on the floor and still comes to r
   for (let i = 0; i < 480; i++) model.step(1 / 60);
   assert.equal(model.awake, false);
   near(Math.max(...model.corners.map(p => p.y)), 800);
+});
+
+test("small circular hand movements spin the card in either direction from different grips", () => {
+  for (const local of [{ x: 0, y: 0 }, { x: 0, y: -80 }, { x: 200, y: -70 }]) {
+    for (const direction of [-1, 1]) {
+      const model = new PhysicsCard({ width: 1600, height: 3000 });
+      Object.assign(model.body, { x: 800, y: 1000 });
+      const grab = point(model.body, local.x, local.y);
+      model.beginDrag(grab.x, grab.y);
+      const rotation = circleDrag(model, grab, { direction });
+      assert.ok(rotation * direction > Math.PI * 2,
+        `small circles should build a full spin at ${JSON.stringify(local)}: ${rotation}`);
+      assert.ok(model.body.angularVelocity * direction > 3);
+    }
+  }
+});
+
+test("reversing the circular gesture reverses the swing and release keeps its momentum", () => {
+  const model = new PhysicsCard({ width: 1600, height: 3000 });
+  Object.assign(model.body, { x: 800, y: 1000 });
+  const grab = { x: 800, y: 920 };
+  model.beginDrag(grab.x, grab.y);
+  circleDrag(model, grab);
+  const reverseRotation = circleDrag(model, grab, { direction: -1 });
+  assert.ok(reverseRotation < -Math.PI);
+  assert.ok(model.body.angularVelocity < -3);
+  const spin = model.body.angularVelocity;
+  model.endDrag();
+  near(model.body.angularVelocity, spin);
+  model.step(.1);
+  assert.ok(model.body.angularVelocity < spin * .95);
+});
+
+test("stopping a circular gesture leaves inertia that settles under gravity", () => {
+  const model = new PhysicsCard({ width: 1600, height: 3000 });
+  Object.assign(model.body, { x: 800, y: 1000 });
+  const grab = { x: 800, y: 920 };
+  model.beginDrag(grab.x, grab.y);
+  circleDrag(model, grab);
+  const previous = model.body.angle;
+  model.step(1 / 120);
+  assert.ok(model.body.angularVelocity > 3);
+  assert.ok(Math.abs(model.body.angle - previous) > .01);
+  for (let i = 0; i < 1200; i++) model.step(1 / 120);
+  assert.ok(Math.abs(Math.atan2(Math.sin(model.body.angle), Math.cos(model.body.angle))) < .002);
+  assert.ok(Math.abs(model.body.angularVelocity) < .01);
+  const held = point(model.body, 0, -80);
+  near(held.x, grab.x); near(held.y, grab.y);
+});
+
+test("straight back-and-forth gestures do not add assisted spin at the center", () => {
+  const model = new PhysicsCard({ width: 1600, height: 3000 });
+  Object.assign(model.body, { x: 800, y: 1000 });
+  model.beginDrag(800, 1000);
+  for (let i = 0; i < 360; i++) {
+    model.moveDrag(800 + 80 * Math.sin(i / 120 * Math.PI * 4), 1000);
+    model.step(1 / 120);
+    near(model.body.angle, 0); near(model.body.angularVelocity, 0);
+  }
+});
+
+test("subpixel cursor jitter does not wind up a centered grip", () => {
+  const model = new PhysicsCard({ width: 1600, height: 3000 });
+  Object.assign(model.body, { x: 800, y: 1000 });
+  model.beginDrag(800, 1000);
+  let largestAngle = 0;
+  for (let i = 0; i < 600; i++) {
+    model.moveDrag(800 + .25 * Math.sin(i * 2.1), 1000 + .25 * Math.cos(i * 1.7));
+    model.step(1 / 120);
+    largestAngle = Math.max(largestAngle, Math.abs(model.body.angle));
+  }
+  assert.ok(largestAngle < .1);
+  assert.ok(Math.abs(model.body.angularVelocity) < .2);
+});
+
+test("rapid subpixel circles cannot accumulate assisted spin", () => {
+  for (const radius of [.25, .5]) {
+    const model = new PhysicsCard({ width: 1600, height: 3000 });
+    Object.assign(model.body, { x: 800, y: 1000 });
+    model.beginDrag(800, 1000);
+    let largestAngle = 0;
+    for (let i = 1; i <= 360; i++) {
+      const phase = i / 120 / .05 * Math.PI * 2;
+      model.moveDrag(800 + radius * (Math.cos(phase) - 1), 1000 + radius * Math.sin(phase));
+      model.step(1 / 120);
+      largestAngle = Math.max(largestAngle, Math.abs(model.body.angle));
+    }
+    assert.ok(largestAngle < .02, `${radius}px jitter produced ${largestAngle}rad`);
+    assert.ok(Math.abs(model.body.angularVelocity) < .05);
+  }
+});
+
+test("subpixel curved jitter during a straight drag does not build spin", () => {
+  for (const radius of [.25, .5]) {
+    const model = new PhysicsCard({ width: 1600, height: 3000 });
+    Object.assign(model.body, { x: 800, y: 1000 });
+    model.beginDrag(800, 1000);
+    let largestAngle = 0;
+    for (let i = 1; i <= 360; i++) {
+      const time = i / 120, phase = time / .05 * Math.PI * 2;
+      model.moveDrag(800 + 50 * time + radius * (Math.cos(phase) - 1), 1000 + radius * Math.sin(phase));
+      model.step(1 / 120);
+      largestAngle = Math.max(largestAngle, Math.abs(model.body.angle));
+    }
+    assert.ok(largestAngle < .1, `${radius}px moving jitter produced ${largestAngle}rad`);
+    assert.ok(Math.abs(model.body.angularVelocity) < .2);
+  }
+});
+
+test("circular gestures respond consistently at different pointer frame rates", () => {
+  const results = [18, 36, 72, 144].map(samples => {
+    const model = new PhysicsCard({ width: 1600, height: 3000 });
+    Object.assign(model.body, { x: 800, y: 1000 });
+    const grab = { x: 800, y: 920 };
+    model.beginDrag(grab.x, grab.y);
+    return { rotation: circleDrag(model, grab, { samples }), spin: model.body.angularVelocity };
+  });
+  const reference = results.at(-1);
+  for (const result of results) {
+    assert.ok(Math.abs(result.rotation - reference.rotation) < Math.abs(reference.rotation) * .06);
+    assert.ok(Math.abs(result.spin - reference.spin) < .4);
+  }
 });
