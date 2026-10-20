@@ -193,3 +193,50 @@ test("rotation is frame-rate independent and a ceiling bounce reverses spin", ()
   model.step(.05);
   assert.ok(model.ball.angularVelocity * spin < 0);
 });
+
+test("circles, hearts and stars drop 400 pixels in about half a second", () => {
+  for (const shape of ["circle", "heart", "star"]) {
+    const model = new BallGame({ width: 1000, height: 1600 });
+    model.start(500, 300, 18, shape);
+    model.ball.vy = 0;
+    let elapsed = 0;
+    while (model.ball.y < 700 && elapsed < 1) {
+      model.step(1 / 240); elapsed += 1 / 240;
+    }
+    assert.ok(elapsed > .49 && elapsed < .55, `${shape} fall took ${elapsed} seconds`);
+  }
+});
+
+test("clicking each shape lifts it about ten percent higher on small and tall screens", () => {
+  for (const height of [400, 900]) {
+    for (const shape of ["circle", "heart", "star"]) {
+      for (const offset of [-.5, 0, .5]) {
+        const model = new BallGame({ width: 1000, height });
+        model.start(500, height * .8, 18, shape);
+        model.ball.vy = 0;
+        const startY = model.ball.y;
+        assert.equal(model.hit(model.ball.x + offset * model.ball.radius, model.ball.y).hit, true);
+        for (let i = 0; i < 1600 && model.ball.vy < 0; i++) model.step(.001);
+        const rise = startY - model.ball.y;
+        const previousRise = Math.min(620 ** 2 / (2 * 900), height * .38)
+          * (1 - Math.abs(offset) * .12) ** 2;
+        assert.ok(rise > previousRise * 1.08 && rise < previousRise * 1.12,
+          `${shape} click at ${offset}: rise ${rise}, previous ${previousRise}`);
+      }
+    }
+  }
+});
+
+test("the faster game keeps the previous jump height on small and tall screens", () => {
+  for (const height of [400, 900]) {
+    function rise(gravity) {
+      const model = new BallGame({ width: 1000, height });
+      if (gravity) model.gravity = gravity;
+      model.start(500, height * .8, 18, "circle");
+      const startY = model.ball.y;
+      for (let i = 0; i < 1600 && model.ball.vy < 0; i++) model.step(.001);
+      return startY - model.ball.y;
+    }
+    assert.ok(Math.abs(rise() - rise(900)) < .01);
+  }
+});

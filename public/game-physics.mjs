@@ -1,3 +1,6 @@
+import { GRAVITY } from "./physics-config.mjs";
+import { selectBallShape } from "./ball-shapes.mjs";
+
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
 function fitRadius(radius, width, height) {
@@ -14,14 +17,15 @@ export class BallGame {
   constructor({ width, height }) {
     this.width = width;
     this.height = height;
-    this.gravity = 900;
+    this.gravity = GRAVITY;
     this.active = false;
     this.score = 0;
     this.ball = { x: 0, y: 0, vx: 0, vy: 0, radius: 18, shape: "circle", angle: 0, angularVelocity: 0 };
   }
 
   get launchSpeed() {
-    return Math.min(620, Math.sqrt(2 * this.gravity * this.height * .38));
+    // Keep the initial jump height independent of the shared gravity scale.
+    return Math.min(620 * Math.sqrt(this.gravity / 900), Math.sqrt(2 * this.gravity * this.height * .38));
   }
 
   start(x, y, selectedRadius = 18, selectedShape = selectBallShape()) {
@@ -48,7 +52,8 @@ export class BallGame {
     }
     const direction = clamp((ball.x - x) / ball.radius, -1, 1);
     ball.vx = direction * this.launchSpeed * .65;
-    ball.vy = -this.launchSpeed * (1 - Math.abs(direction) * .12);
+    // A successful click lifts the shape 10% higher than its initial launch.
+    ball.vy = -this.launchSpeed * Math.sqrt(1.1) * (1 - Math.abs(direction) * .12);
     if (ball.shape !== "circle") {
       const previousSpin = ball.angularVelocity;
       const spin = clamp(previousSpin * .45 + direction * 5, -7, 7);
@@ -98,5 +103,4 @@ export class BallGame {
     this.ball.y = clamp(this.ball.y, radius, Math.max(radius, height - radius));
   }
 }
-import { selectBallShape } from "./ball-shapes.mjs";
 

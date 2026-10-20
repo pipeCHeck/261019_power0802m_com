@@ -1,5 +1,6 @@
-import { BallGame, radiusForDrag } from "./game-physics.mjs";
+import { radiusForDrag } from "./game-physics.mjs";
 import { getBallShapePath, selectBallShape } from "./ball-shapes.mjs";
+import { scene } from "./scene.js";
 
 class ScoreTicker {
   constructor(root, motionPreference) {
@@ -106,13 +107,11 @@ function initGame() {
   const tickers = scoreRoots.map(root => new ScoreTicker(root, reducedMotion));
   const ticker = Object.fromEntries(["show", "preview", "hide", "updateMotion"].map(method =>
     [method, (...args) => tickers.forEach(item => item[method](...args))]));
-  const game = new BallGame({ width: window.innerWidth, height: window.innerHeight });
+  const game = scene.world.game;
   const pointer = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
   const scorePosition = { x: 0, y: 0 };
   let sizing = null;
   let effects = [];
-  let frameId = null;
-  let lastTime = null;
 
   function positionScore() {
     const x = Math.max(8, Math.min(pointer.x + 18, game.width - 104));
@@ -248,14 +247,11 @@ function initGame() {
   }
 
   function requestFrame() {
-    if (frameId === null && !document.hidden) frameId = window.requestAnimationFrame(frame);
+    scene.requestFrame();
   }
 
-  function frame(time) {
-    frameId = null;
-    const seconds = lastTime === null ? 0 : Math.min((time - lastTime) / 1000, .1);
-    lastTime = time;
-    if (game.step(seconds)) {
+  function frame({ seconds, ended }) {
+    if (ended) {
       canvas.dataset.state = "ended";
       const ending = { heart: "LOVE", star: "STAR" }[game.ball.shape] ?? "GG";
       ticker.show(ending, true);
@@ -265,7 +261,6 @@ function initGame() {
     effects = effects.filter((effect) => effect.age < effect.life);
     draw();
     if (game.active || effects.length) requestFrame();
-    else lastTime = null;
   }
 
   window.addEventListener("pointermove", (event) => {
@@ -281,7 +276,7 @@ function initGame() {
 
   window.addEventListener("pointerdown", (event) => {
     if (!event.isPrimary || event.button !== 0) return;
-    if (event.target.closest("a, button, input, textarea, select, [contenteditable]")) return;
+    if (event.target.closest("a, button, input, textarea, select, [contenteditable], [data-physics-card]")) return;
     event.preventDefault();
     pointer.x = event.clientX;
     pointer.y = event.clientY;
@@ -294,7 +289,6 @@ function initGame() {
       canvas.dataset.state = "sizing";
       updateSizing();
       status.textContent = "드래그로 공 크기를 정하고 손을 떼면 시작합니다.";
-      lastTime = null;
     } else {
       const result = game.hit(pointer.x, pointer.y);
       if (result.hit) {
@@ -320,7 +314,6 @@ function initGame() {
     ticker.show(0);
     positionScore();
     status.textContent = "게임 시작. 떨어지는 공을 클릭해 계속 띄워 주세요.";
-    lastTime = null;
     draw();
     requestFrame();
   }, { passive: true });
@@ -340,9 +333,6 @@ function initGame() {
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
       cancelSizing();
-      if (frameId !== null) window.cancelAnimationFrame(frameId);
-      frameId = null;
-      lastTime = null;
     } else if (game.active || effects.length) {
       requestFrame();
     }
@@ -352,6 +342,7 @@ function initGame() {
     if (reducedMotion.matches) effects = [];
     draw();
   });
+  scene.subscribe(frame);
   resize();
 }
 
