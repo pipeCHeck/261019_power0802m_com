@@ -1,10 +1,11 @@
 import { GRAVITY } from "./physics-config.mjs";
+import { CardMount } from "./card-mount.mjs";
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const wrap = (value, width) => ((value % width) + width) % width;
 
 export class PhysicsCard {
-  constructor({ width, height }) {
+  constructor({ width, height, mounted = false }) {
     this.viewportWidth = Math.max(1, width);
     this.viewportHeight = Math.max(1, height);
     this.body = { x: width / 2, y: height * .2, width: 0, height: 0,
@@ -17,10 +18,14 @@ export class PhysicsCard {
     this.floorImpacts = [];
     this.lastFloorImpact = -Infinity;
     this.resize(width, height);
+    this.mount = mounted ? new CardMount(this) : null;
+    if (mounted) this.sleeping = true;
   }
 
   get displayX() { return wrap(this.body.x, this.viewportWidth); }
   get awake() { return Boolean(this.drag) || !this.sleeping; }
+  get mounted() { return this.mount?.attached === true; }
+  receiveShapeImpact(impact) { return this.mount?.receive(impact) ?? false; }
   get corners() {
     const b = this.body, c = Math.cos(b.angle), s = Math.sin(b.angle);
     return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([x, y]) => ({
@@ -65,9 +70,11 @@ export class PhysicsCard {
     this.body.x = wrap(ratio * this.viewportWidth, this.viewportWidth);
     this.containVertically();
     this.wake();
+    if (this.mounted) this.mount.place();
   }
 
   beginDrag(x, y, copyCenterX) {
+    if (this.mounted) return false;
     const b = this.body;
     const c = Math.cos(b.angle), s = Math.sin(b.angle);
     const nearest = b.x + Math.round((x - b.x) / this.viewportWidth) * this.viewportWidth;
@@ -184,6 +191,7 @@ export class PhysicsCard {
   step(seconds) {
     if (!this.awake || !Number.isFinite(seconds) || seconds <= 0) return;
     const duration = Math.min(seconds, .8);
+    if (this.mounted) { this.time += duration; this.mount.step(duration); return; }
     const steps = Math.ceil(duration * 240), dt = duration / steps;
     const b = this.body, drag = this.drag;
     let startX = 0, startY = 0, targetY = 0;

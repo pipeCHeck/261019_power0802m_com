@@ -1,6 +1,6 @@
 import { PhysicsWorld } from "./world-physics.mjs";
 
-const world = new PhysicsWorld({ width: window.innerWidth, height: window.innerHeight });
+const world = new PhysicsWorld({ width: window.innerWidth, height: window.innerHeight, mounted: true });
 const listeners = new Set();
 let frameId = null;
 let lastTime = null;

@@ -136,8 +136,10 @@ export class PhysicsWorld {
       const rb = subtract(point, ball), rc = { x: point.x - centerX, y: point.y - b.y };
       const invBallMass = 1 / clamp((ball.radius / 30) ** 2, .4, 4);
       const invBallInertia = invBallMass / (.5 * ball.radius ** 2);
-      const invCardMass = card.drag ? 0 : 1 / card.mass;
-      const invCardInertia = invCardMass / card.inertia;
+      const mounted = card.mounted;
+      const invCardMass = card.drag || mounted ? 0 : 1 / card.mass;
+      const invCardInertia = mounted ? card.mount.inverseInertia : invCardMass / card.inertia;
+      const rotationArm = mounted ? { x: point.x - (card.mount.pivot.x + centerX - b.x), y: point.y - card.mount.pivot.y } : rc;
       const relativeVelocity = () => ({ x: ball.vx - ball.angularVelocity * rb.y - b.vx + b.angularVelocity * rc.y,
         y: ball.vy + ball.angularVelocity * rb.x - b.vy - b.angularVelocity * rc.x });
       const apply = (direction, impulse) => {
@@ -146,10 +148,11 @@ export class PhysicsWorld {
         ball.angularVelocity += cross(rb, direction) * impulse * invBallInertia;
         b.vx -= direction.x * impulse * invCardMass;
         b.vy -= direction.y * impulse * invCardMass;
-        b.angularVelocity -= cross(rc, direction) * impulse * invCardInertia;
+        b.angularVelocity -= cross(rotationArm, direction) * impulse * invCardInertia;
+        if (mounted) card.mount.syncPose();
       };
       const denominator = direction => invBallMass + invCardMass +
-        cross(rb, direction) ** 2 * invBallInertia + cross(rc, direction) ** 2 * invCardInertia;
+        cross(rb, direction) ** 2 * invBallInertia + cross(rotationArm, direction) ** 2 * invCardInertia;
       const velocity = dot(relativeVelocity(), n);
       const before = { vx: ball.vx, vy: ball.vy };
       let impact = null;
@@ -172,6 +175,7 @@ export class PhysicsWorld {
       ball.vx = clamp(ball.vx, -2800, 2800); ball.vy = clamp(ball.vy, -2800, 2800);
       ball.angularVelocity = clamp(ball.angularVelocity, -14, 14);
       if (impact) {
+        card.receiveShapeImpact(impact);
         // Measure the actual kick delivered to the ball, after response and speed limits.
         impact.bounceSpeed = Math.max(0, (ball.vx - before.vx) * n.x + (ball.vy - before.vy) * n.y);
         impact.velocity = { x: b.vx - b.angularVelocity * rc.y, y: b.vy + b.angularVelocity * rc.x };

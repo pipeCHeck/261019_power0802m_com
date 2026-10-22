@@ -10,7 +10,7 @@ import { impactStyleFromSearch } from "../public/effect-variants.mjs";
 import { createBounceImpact, drawBounceImpact, bounceStyleFromSearch } from "../public/bounce-effects.mjs";
 import { updateBounceImpact } from "../public/bounce-placement.mjs";
 
-function setup({ reducedMotion = false, search = "", random = Math.random } = {}) {
+function setup({ reducedMotion = false, search = "", random = Math.random, mounted = false } = {}) {
   class Element {
     constructor() {
       this.listeners = new Map(); this.children = []; this.dataset = {}; this.hidden = false;
@@ -60,7 +60,7 @@ function setup({ reducedMotion = false, search = "", random = Math.random } = {}
   };
   document.createElement = () => new Element();
   const canvas = document.getElementById("game-canvas");
-  const drawCalls = [], createdImpacts = [], createdBounces = [];
+  const drawCalls = [], createdImpacts = [], createdBounces = [], navigations = [];
   canvas.getContext = () => new Proxy({}, { get: (_, name) => (...args) => drawCalls.push({ name, args }) });
   const frames = new Map(), timers = new Map(); let nextFrame = 0, nextTimer = 0, timerNow = 0, now = 0, model, world;
   const raf = fn => { frames.set(++nextFrame, fn); return nextFrame; };
@@ -68,11 +68,11 @@ function setup({ reducedMotion = false, search = "", random = Math.random } = {}
   Object.assign(window, { innerWidth: 1000, innerHeight: 800, devicePixelRatio: 1,
     performance: { now: () => now },
     getComputedStyle: () => ({ transform: "matrix(1, 0, 0, 1, 0, -12)" }),
-    location: { search }, requestAnimationFrame: raf, cancelAnimationFrame: cancel,
+    location: { search, assign: url => navigations.push(url) }, requestAnimationFrame: raf, cancelAnimationFrame: cancel,
     setTimeout: (fn, delay = 0) => { timers.set(++nextTimer, { fn, due: timerNow + delay }); return nextTimer; },
     clearTimeout: id => timers.delete(id), matchMedia: () => ({ matches: reducedMotion, addEventListener() {} }) });
   const context = { window, document, Math: Object.assign(Object.create(Math), { random }), requestAnimationFrame: raf, cancelAnimationFrame: cancel,
-    PhysicsWorld: class extends PhysicsWorld { constructor(options) { super(options); model = this.card; world = this; } },
+    PhysicsWorld: class extends PhysicsWorld { constructor(options) { super({ ...options, mounted }); model = this.card; world = this; } },
     BallGame, radiusForDrag, getBallShapePath, selectBallShape,
     createFloorImpact: (...args) => { const effect = createFloorImpact(...args); createdImpacts.push(effect); return effect; },
     drawFloorImpact, impactStyleFromSearch, drawBounceImpact, bounceStyleFromSearch, updateBounceImpact,
@@ -94,7 +94,7 @@ function setup({ reducedMotion = false, search = "", random = Math.random } = {}
     for (const fn of pending) fn(now);
   };
   return { window, document, layer, card, canvas, model, world, scene: runInNewContext("scene", context),
-    frames, pointer, advance, Element, drawCalls, createdImpacts, createdBounces,
+    frames, pointer, advance, Element, drawCalls, createdImpacts, createdBounces, navigations,
     runTimers(ms) {
       const until = timerNow + ms;
       while (true) {
@@ -113,6 +113,87 @@ function deliverImpact(env, x, speed = 1200) {
 }
 
 const captionPosition = root => root.style.transform.match(/translate3d\(([-\d.]+)px, ([-\d.]+)px/).slice(1).map(Number);
+
+test("a short card click opens its page once without starting the ball or keeping a grip", () => {
+  const e = setup();
+  const x = e.model.displayX, y = e.model.body.y;
+  e.pointer("pointerdown", e.card, { clientX: x, clientY: y });
+  e.pointer("pointermove", e.card, { clientX: x + 2, clientY: y + 2 });
+  e.pointer("pointerup", e.card, { clientX: x + 2, clientY: y + 2 });
+  e.pointer("pointerup", e.card, { clientX: x + 2, clientY: y + 2 });
+  assert.deepEqual(e.navigations, ["/space.html"]);
+  assert.equal(e.model.drag, null);
+  assert.equal(e.world.game.active, false);
+  assert.equal(e.layer.hasPointerCapture(1), false);
+});
+
+test("drag excursions, release-only movement, long grips and cancellations never open a page", () => {
+  for (const action of ["return", "release", "hold", "cancel", "blur", "escape"]) {
+    const e = setup(), x = e.model.displayX, y = e.model.body.y;
+    e.pointer("pointerdown", e.card, { clientX: x, clientY: y });
+    if (action === "return") {
+      e.pointer("pointermove", e.card, { clientX: x + 40, clientY: y });
+      e.pointer("pointermove", e.card, { clientX: x, clientY: y });
+    }
+    if (action === "hold") e.advance(600);
+    if (action === "cancel") e.pointer("pointercancel");
+    if (action === "blur") e.window.emit("blur");
+    if (action === "escape") e.window.emit("keydown", { key: "Escape" });
+    e.pointer("pointerup", e.card, { clientX: x + (action === "release" ? 40 : 0), clientY: y });
+    assert.equal(e.navigations.length, 0, action);
+    assert.equal(e.model.drag, null, action);
+  }
+});
+
+test("Enter opens the focused card page while arrow keys retain physical nudges", () => {
+  const e = setup();
+  e.card.emit("keydown", { key: "ArrowLeft" });
+  assert.equal(e.navigations.length, 0);
+  assert.ok(e.model.body.vx < 0);
+  e.card.emit("keydown", { key: "Enter" });
+  assert.deepEqual(e.navigations, ["/space.html"]);
+});
+
+test("mounted card still opens on a click, while dragging and arrow keys cannot rip it loose", () => {
+  const e = setup({ mounted: true }), before = { ...e.model.body };
+  e.pointer("pointerdown");
+  e.pointer("pointermove", e.card, { clientX: before.x + 250, clientY: before.y + 180 });
+  e.advance(); e.pointer("pointerup");
+  assert.equal(e.model.mounted, true); assert.equal(e.model.drag, null);
+  assert.equal(e.navigations.length, 0); assert.equal(e.model.mount.hp, 300);
+  assert.equal(e.model.body.x, before.x); assert.equal(e.model.body.y, before.y);
+  e.card.emit("keydown", { key: "ArrowLeft" });
+  assert.equal(Math.abs(e.model.body.vx), 0); assert.equal(e.model.body.angularVelocity, 0);
+  e.pointer("pointerdown"); e.pointer("pointerup");
+  assert.deepEqual(e.navigations, ["/space.html"]);
+});
+
+test("after the final hit, the same card input switches to the existing drag interaction", () => {
+  const e = setup({ mounted: true });
+  e.model.mount.hp = 1; e.model.receiveShapeImpact({ speed: 900, radius: 30, time: 1 });
+  e.pointer("pointerdown");
+  assert.ok(e.model.drag);
+  e.pointer("pointermove", e.card, { clientX: 650, clientY: 350 }); e.advance(); e.advance();
+  e.pointer("pointerup");
+  assert.equal(e.model.mounted, false); assert.equal(e.model.drag, null);
+  assert.equal(e.navigations.length, 0);
+});
+
+test("mounted layout positions the fastener beneath the copy, preserves HP on resize, and removes it on release", () => {
+  const e = setup({ mounted: true });
+  e.model.receiveShapeImpact({ speed: 600, radius: 30, time: 1 });
+  const hp = e.model.mount.hp;
+  e.document.querySelector(".description").getBoundingClientRect = () => ({ bottom: 310 });
+  e.window.emit("resize");
+  assert.equal(e.model.mount.pivot.y, 310 + 48 - 3 + 16);
+  assert.equal(e.model.mount.hp, hp);
+  assert.ok(e.document.documentElement.classes.has("mounted-card-layout"));
+  assert.ok(e.card.classes.has("is-mounted"));
+  e.model.mount.hp = 1; e.model.receiveShapeImpact({ speed: 600, radius: 30, time: 2 });
+  e.scene.requestFrame(); e.advance();
+  assert.equal(e.card.classes.has("is-mounted"), false);
+  assert.ok(e.document.documentElement.classes.has("mounted-card-layout"), "the copy must not jump when the card falls");
+});
 
 test("shape impacts default to pop, consume events once, and respect trials and reduced motion", () => {
   for (const [search, reducedMotion, expected] of [["", false, 1], ["?bounce=pop", false, 1],
