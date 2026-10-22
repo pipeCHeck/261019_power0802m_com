@@ -1,6 +1,10 @@
 import { radiusForDrag } from "./game-physics.mjs";
 import { getBallShapePath, selectBallShape } from "./ball-shapes.mjs";
 import { scene } from "./scene.js";
+import { createFloorImpact, drawFloorImpact } from "./floor-effects.mjs";
+import { impactStyleFromSearch } from "./effect-variants.mjs";
+import { createBounceImpact, drawBounceImpact, bounceStyleFromSearch } from "./bounce-effects.mjs";
+import { updateBounceImpact } from "./bounce-placement.mjs";
 
 class ScoreTicker {
   constructor(root, motionPreference) {
@@ -71,6 +75,14 @@ class ScoreTicker {
     }, this.duration);
   }
 
+  clear() {
+    window.clearTimeout(this.transitionTimer);
+    window.clearTimeout(this.hideTimer);
+    this.root.hidden = true;
+    this.window.replaceChildren();
+    this.ending = this.previewing = this.hiding = false;
+  }
+
   updateMotion() {
     if (this.root.hidden) return;
     window.clearTimeout(this.transitionTimer);
@@ -92,6 +104,85 @@ class ScoreTicker {
   }
 }
 
+class ImpactTicker extends ScoreTicker {
+  constructor(root, motionPreference) {
+    super(root, motionPreference);
+    this.counting = false;
+    this.counterLine = null;
+    this.quickExit = false;
+  }
+
+  showSpeed(speed) {
+    this.counting = false;
+    super.show("0.0px/s", true);
+    this.target = speed;
+    this.counterLine = this.window.lastElementChild;
+    this.startedAt = window.performance.now();
+    this.root.dataset.value = `${speed.toFixed(1)}px/s`;
+    this.counting = !this.motionPreference.matches;
+    if (!this.counting) this.finishCount();
+  }
+
+  updateCount() {
+    if (!this.counting) return false;
+    // Wall-clock duration is independent of both the final value and physics
+    // substeps. All visible badges share the scene's existing frame callback.
+    const progress = Math.min(1, (window.performance.now() - this.startedAt) / 650);
+    const eased = 1 - (1 - progress) ** 3;
+    this.counterLine.textContent = `${(this.target * eased).toFixed(1)}px/s`;
+    if (progress === 1) this.finishCount();
+    return this.counting;
+  }
+
+  finishCount() {
+    if (this.counterLine) this.counterLine.textContent = `${this.target.toFixed(1)}px/s`;
+    this.counting = false;
+  }
+
+  hide() { this.finishCount(); super.hide(); }
+
+  dismissQuickly() {
+    if (this.root.hidden || this.quickExit) return;
+    if (this.motionPreference.matches) { this.clear(); return; }
+    window.clearTimeout(this.transitionTimer);
+    window.clearTimeout(this.hideTimer);
+    this.counting = false;
+    this.ending = false;
+    this.hiding = this.quickExit = true;
+    const line = this.window.lastElementChild;
+    if (!line) { this.clear(); return; }
+    // An interrupted entrant must not rush through the whole visible window
+    // on its way down. Freeze its pose and erase only the already visible slice.
+    const transform = window.getComputedStyle(line).transform;
+    const start = transform === "none" ? "translateY(0)" : transform;
+    const entering = window.performance.now() - this.startedAt < 650;
+    let visibleTop = 0;
+    if (entering) {
+      const clip = this.window.getBoundingClientRect(), bounds = line.getBoundingClientRect();
+      if (bounds.height > 0) visibleTop = Math.max(0, Math.min(100, (clip.top - bounds.top) / bounds.height * 100));
+    }
+    line.style.setProperty("--impact-exit-start", start);
+    line.style.setProperty("--impact-exit-end", entering ? start : "translateY(110%)");
+    line.style.setProperty("--impact-exit-clip-start", entering ? `inset(${visibleTop}% 0 0 0)` : "inset(0)");
+    line.style.setProperty("--impact-exit-clip-end", entering ? "inset(100% 0 0 0)" : "inset(0)");
+    this.window.replaceChildren(line);
+    line.className = "score-line is-dismissed";
+    this.transitionTimer = window.setTimeout(() => this.clear(), 180);
+  }
+
+  clear() {
+    this.counting = false;
+    this.counterLine = null;
+    this.quickExit = false;
+    super.clear();
+  }
+
+  updateMotion() {
+    if (this.motionPreference.matches) this.finishCount();
+    super.updateMotion();
+  }
+}
+
 function initGame() {
   const canvas = document.getElementById("game-canvas");
   const context = canvas.getContext("2d");
@@ -104,14 +195,61 @@ function initGame() {
   const ballLayers = [ballRoot, document.getElementById("game-ball-tint")];
   const status = document.getElementById("game-status");
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const impactStyle = impactStyleFromSearch(window.location.search);
+  const bounceStyle = bounceStyleFromSearch(window.location.search) || "pop";
   const tickers = scoreRoots.map(root => new ScoreTicker(root, reducedMotion));
   const ticker = Object.fromEntries(["show", "preview", "hide", "updateMotion"].map(method =>
     [method, (...args) => tickers.forEach(item => item[method](...args))]));
+  const impactRoot = document.getElementById("impact-scores");
+  const impactSlots = [];
+  function createImpactSlot() {
+    const root = document.createElement("div"), content = document.createElement("div");
+    root.className = "game-score impact-score";
+    root.hidden = true;
+    content.className = "score-window";
+    root.append(content);
+    impactRoot.append(root);
+    const slot = { root, ticker: new ImpactTicker(root, reducedMotion) };
+    impactSlots.push(slot);
+    return slot;
+  }
+  let lastImpactOffset = null;
   const game = scene.world.game;
   const pointer = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
   const scorePosition = { x: 0, y: 0 };
   let sizing = null;
   let effects = [];
+
+  function showImpactScore(effect, normalSpeed) {
+    const x = ((effect.x % game.width) + game.width) % game.width;
+    // Only recycle expired badges; live captions retain their own position.
+    const slot = impactSlots.find(s => s.root.hidden) ?? createImpactSlot();
+    slot.ticker.clear();
+    // Same stacking level: the last sibling paints on top, including recycled nodes.
+    impactRoot.append(slot.root);
+    const value = `${normalSpeed.toFixed(1)}px/s`;
+    const width = Math.max(116, value.length * 11 + 6);
+    slot.root.style.width = `${width}px`;
+    const email = document.querySelector(".contact-email")?.getBoundingClientRect?.();
+    const desiredTop = email?.height > 0 ? email.top + email.height / 2 - 16.5 : effect.y - 54;
+    const baseTop = Math.max(18, Math.min(desiredTop, game.height - 51));
+    let offset = Math.random() * 20 - 10;
+    if (lastImpactOffset !== null && Math.abs(offset - lastImpactOffset) < 5) offset = (offset + 20) % 20 - 10;
+    lastImpactOffset = offset;
+    const left = Math.max(8, Math.min(x - width / 2, game.width - width - 8));
+    const top = Math.max(8, Math.min(baseTop + offset, game.height - 41));
+    const bounds = { left, top, width };
+    for (const previous of impactSlots) {
+      if (previous === slot || previous.root.hidden || !previous.bounds) continue;
+      const dx = Math.abs(previous.bounds.left + previous.bounds.width / 2 - left - width / 2);
+      const dy = Math.abs(previous.bounds.top - top);
+      if (dx <= 45 && dy <= 16) previous.ticker.dismissQuickly();
+    }
+    slot.bounds = bounds;
+    slot.root.style.transform = `translate3d(${left}px, ${top}px, 0)`;
+    slot.root.setAttribute("title", `충돌 지점의 수직 충돌 속도 ${value}`);
+    slot.ticker.showSpeed(normalSpeed);
+  }
 
   function positionScore() {
     const x = Math.max(8, Math.min(pointer.x + 18, game.width - 104));
@@ -138,6 +276,10 @@ function initGame() {
   }
 
   function resize() {
+    effects = effects.filter(effect => effect.type !== "floor" && effect.type !== "bounce");
+    scene.world.drainShapeImpacts();
+    for (const slot of impactSlots) slot.ticker.clear();
+    lastImpactOffset = null;
     const ratio = Math.min(window.devicePixelRatio || 1, 2);
     game.resize(window.innerWidth, window.innerHeight);
     canvas.width = Math.round(game.width * ratio);
@@ -191,8 +333,17 @@ function initGame() {
       }
     }
     for (const effect of effects) {
+      if (effect.type === "bounce") {
+        drawBounceImpact(context, effect, game.width, game.height, { card: scene.world.card.body, ball: game.active ? game.ball : null });
+        continue;
+      }
+      if (effect.type === "floor") {
+        drawFloorImpact(context, effect, game.width, game.height);
+        continue;
+      }
       const progress = effect.age / effect.life;
       context.globalAlpha = 1;
+      context.lineCap = "round";
       context.lineWidth = effect.type === "click" ? 1.05 : 1.7;
       context.beginPath();
       if (effect.type === "click") {
@@ -250,17 +401,37 @@ function initGame() {
     scene.requestFrame();
   }
 
-  function frame({ seconds, ended }) {
+  function frame({ seconds, ended, floorImpacts = [], shapeImpacts = [] }) {
     if (ended) {
       canvas.dataset.state = "ended";
       const ending = { heart: "LOVE", star: "STAR" }[game.ball.shape] ?? "GG";
       ticker.show(ending, true);
       status.textContent = `게임 종료. ${game.score}점. 빈 곳을 클릭하면 다시 시작합니다.`;
     }
-    for (const effect of effects) effect.age += seconds;
+    for (const effect of effects) {
+      effect.age += seconds;
+      if (effect.type === "bounce") updateBounceImpact(effect,
+        { card: scene.world.card.body, ball: game.active ? game.ball : null }, game.width);
+    }
     effects = effects.filter((effect) => effect.age < effect.life);
+    for (const impact of floorImpacts) {
+      const effect = createFloorImpact(impact, Math.random, impactStyle);
+      showImpactScore(effect, impact.normalSpeed);
+      if (!reducedMotion.matches) effects.push(effect);
+    }
+    if (bounceStyle && !reducedMotion.matches) {
+      for (const impact of shapeImpacts) {
+        const effect = createBounceImpact(impact, Math.random, bounceStyle);
+        // A contact may occur early in a frame's physics substeps. Catch its
+        // motion up to the bodies' current time before the first drawing.
+        effect.age = Math.max(0, scene.world.time - (impact.time ?? scene.world.time));
+        updateBounceImpact(effect, { card: scene.world.card.body, ball: game.active ? game.ball : null }, game.width);
+        if (effect.age < effect.life) effects.push(effect);
+      }
+    }
+    const counting = impactSlots.map(slot => slot.ticker.updateCount()).some(Boolean);
     draw();
-    if (game.active || effects.length) requestFrame();
+    if (game.active || effects.length || counting) requestFrame();
   }
 
   window.addEventListener("pointermove", (event) => {
@@ -333,12 +504,14 @@ function initGame() {
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
       cancelSizing();
+      for (const slot of impactSlots) slot.ticker.clear();
     } else if (game.active || effects.length) {
       requestFrame();
     }
   });
   reducedMotion.addEventListener("change", () => {
     ticker.updateMotion();
+    for (const slot of impactSlots) slot.ticker.updateMotion();
     if (reducedMotion.matches) effects = [];
     draw();
   });

@@ -16,7 +16,9 @@ function frame(time) {
   lastTime = time;
   const ended = world.step(seconds) || pendingEnd;
   pendingEnd = false;
-  for (const listener of listeners) listener({ seconds, ended });
+  const floorImpacts = world.card.drainFloorImpacts();
+  const shapeImpacts = world.drainShapeImpacts();
+  for (const listener of listeners) listener({ seconds, ended, floorImpacts, shapeImpacts });
   if (world.awake) requestFrame();
   if (frameId === null) lastTime = null;
 }

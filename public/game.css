@@ -63,6 +63,17 @@ html.game-sizing, html.game-sizing * { user-select: none; }
 }
 
 .score-window { display: grid; height: 100%; overflow: hidden; }
+.impact-score {
+  z-index: 13;
+  width: 116px;
+  height: 33px;
+  line-height: 33px;
+  text-align: center;
+  mix-blend-mode: normal;
+  color: #fff;
+}
+/* The box travels with its number through the existing clipped slide. */
+.impact-score .score-line { padding: 0 10px; background: #292b26; color: #fff; }
 /* Keep the two score colors disjoint so glyph antialiasing is applied once. */
 #game-score {
   mask: url(#score-ball-outside-mask);
@@ -78,7 +89,19 @@ html.game-sizing, html.game-sizing * { user-select: none; }
 .score-line { grid-area: 1 / 1; display: block; white-space: nowrap; }
 .score-line.is-entering { animation: message-enter 650ms cubic-bezier(.76, 0, .24, 1) both; }
 .score-line.is-leaving { animation: message-leave 650ms cubic-bezier(.76, 0, .24, 1) both; }
+.impact-score .score-line.is-dismissed { animation: impact-dismiss 180ms cubic-bezier(.4, 0, 1, 1) both; }
+@keyframes impact-dismiss {
+  from {
+    transform: var(--impact-exit-start, translateY(0));
+    clip-path: var(--impact-exit-clip-start, inset(0));
+  }
+  to {
+    transform: var(--impact-exit-end, translateY(110%));
+    clip-path: var(--impact-exit-clip-end, inset(0));
+  }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .score-line.is-entering, .score-line.is-leaving { animation: none; }
+  .impact-score .score-line.is-dismissed { animation: none; }
 }

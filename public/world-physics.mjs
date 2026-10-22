@@ -109,9 +109,18 @@ export class PhysicsWorld {
   constructor(bounds) {
     this.card = new PhysicsCard(bounds);
     this.game = new BallGame(bounds);
+    this.time = 0;
+    this.shapeImpacts = [];
+    this.lastShapeImpact = -Infinity;
   }
 
   get awake() { return this.card.awake || this.game.active; }
+
+  drainShapeImpacts() {
+    const events = this.shapeImpacts;
+    this.shapeImpacts = [];
+    return events;
+  }
 
   resolveContacts() {
     if (!this.game.active) return false;
@@ -142,7 +151,14 @@ export class PhysicsWorld {
       const denominator = direction => invBallMass + invCardMass +
         cross(rb, direction) ** 2 * invBallInertia + cross(rc, direction) ** 2 * invCardInertia;
       const velocity = dot(relativeVelocity(), n);
+      const before = { vx: ball.vx, vy: ball.vy };
+      let impact = null;
       if (velocity < 0) {
+        if (velocity < -70 && this.time - this.lastShapeImpact >= .06) {
+          impact = { x: point.x, y: point.y, time: this.time, normal: { x: n.x, y: n.y },
+            speed: -velocity, tangentSpeed: dot(relativeVelocity(), { x: -n.y, y: n.x }),
+            shape: ball.shape, radius: ball.radius };
+        }
         const impulse = -(1 + (velocity < -80 ? .62 : 0)) * velocity / denominator(n);
         apply(n, impulse);
         const tangent = { x: -n.y, y: n.x };
@@ -155,6 +171,14 @@ export class PhysicsWorld {
       ball.y += n.y * (depth + .01);
       ball.vx = clamp(ball.vx, -2800, 2800); ball.vy = clamp(ball.vy, -2800, 2800);
       ball.angularVelocity = clamp(ball.angularVelocity, -14, 14);
+      if (impact) {
+        // Measure the actual kick delivered to the ball, after response and speed limits.
+        impact.bounceSpeed = Math.max(0, (ball.vx - before.vx) * n.x + (ball.vy - before.vy) * n.y);
+        impact.velocity = { x: b.vx - b.angularVelocity * rc.y, y: b.vy + b.angularVelocity * rc.x };
+        this.shapeImpacts.push(impact);
+        if (this.shapeImpacts.length > 16) this.shapeImpacts.shift();
+        this.lastShapeImpact = this.time;
+      }
       return true;
     }
     return false;
@@ -163,7 +187,7 @@ export class PhysicsWorld {
   step(seconds) {
     if (!Number.isFinite(seconds) || seconds <= 0) return false;
     const duration = Math.min(seconds, .1), card = this.card, ball = this.game.ball;
-    if (!this.game.active) { card.step(duration); return false; }
+    if (!this.game.active) { this.time += duration; card.step(duration); return false; }
     const drag = card.drag;
     const target = drag && { x: drag.x, y: drag.y, startX: drag.previousX, startY: drag.previousY };
     const movement = target ? Math.hypot(target.x - target.startX, target.y - target.startY) : 0;
@@ -173,6 +197,7 @@ export class PhysicsWorld {
     const count = Math.min(1024, Math.max(1, Math.ceil(duration * 240), Math.ceil((speed * duration + movement) / resolution)));
     let ended = false;
     for (let i = 1; i <= count; i++) {
+      this.time += duration / count;
       if (target) card.moveDrag(target.startX + (target.x - target.startX) * i / count, target.startY + (target.y - target.startY) * i / count);
       card.step(duration / count);
       if (this.game.step(duration / count)) ended = true;

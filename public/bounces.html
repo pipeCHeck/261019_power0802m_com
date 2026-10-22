@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" /><meta name="theme-color" content="#f8f7f3" />
+  <title>통통 충돌 미리보기 · power0802m</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/effects-preview.css" />
+  <script type="module" src="/bounce-preview.js"></script>
+</head>
+<body>
+  <header class="preview-header"><a href="/">power0802m.com <span>↗</span></a><span>BOUNCE STUDIES <b>A / B / C</b></span></header>
+  <main>
+    <section class="intro" aria-labelledby="title">
+      <div><p class="kicker">공 · 하트 · 별의 충돌 모션</p><h1 id="title">가볍게, 통통.</h1></div>
+      <p>클릭 효과와 폭죽처럼, 가벼운 선으로만 표현했어요.<br />짧게 펼쳐지는 선 · 작은 선 폭죽 · 통통 휘는 곡선을 비교해 보세요. <a href="/effects.html?collection=previous">바닥 효과 비교 ↗</a></p>
+    </section>
+    <div class="controls" aria-label="충돌 비교 조건">
+      <label>장면 <select id="motion"><option value="still" selected>기본 충돌</option><option value="travel">함께 빠르게 이동</option><option value="sweep">박스로 밀어올리기</option></select></label>
+      <label>모양 <select id="shape"><option value="circle">공</option><option value="heart" selected>하트</option><option value="star">별</option></select></label>
+      <label>크기 (지름) <select id="radius"><option value="12">24px</option><option value="24" selected>48px</option><option value="48">96px</option><option value="64">128px</option></select></label>
+      <label>세기 <select id="strength"><option value="300">가볍게</option><option value="650" selected>보통</option><option value="1050">강하게</option></select></label>
+      <label>방향 <select id="direction"><option value="-1">왼쪽 ↙</option><option value="0" selected>수직 ↓</option><option value="1">오른쪽 ↘</option></select></label>
+      <label>재생 <select id="speed"><option value="1" selected>1×</option><option value="0.5">0.5×</option><option value="0.25">0.25×</option></select></label>
+      <div class="playback"><button id="toggle" type="button">일시정지</button><button id="reroll" type="button">새 패턴 ↻</button></div>
+    </div>
+    <p class="motion-note" id="motion-note" hidden>동작 줄이기 설정에 따라 멈춘 화면으로 시작합니다. 재생을 눌러 움직임을 비교할 수 있어요.</p>
+    <label class="timeline">장면 탐색 <input id="timeline" type="range" min="0" max="1800" step="1" value="0" aria-label="장면 시간. 움직이면 재생이 멈춥니다." /><output id="scene-time" for="timeline">0ms</output></label>
+    <section id="comparisons" class="comparisons" aria-label="통통 튀는 충돌 효과 3안"></section>
+    <section class="selection" aria-label="선택한 효과">
+      <div><span class="kicker">선택한 스타일</span><h2 id="selected-name">A · 톡! 선 팝</h2><p id="selected-description"></p></div>
+      <a id="try-style" class="try-link" href="/?bounce=pop">실제 사이트에서 시험하기 <span>↗</span></a>
+      <p class="selection-hint">A 톡! 선 팝을 기본 사이트에 적용했습니다.<br />공 크기·세기를 바꿔 효과의 크기를 비교하고, 장면을 바꿔 이동 중의 동작을 확인해 보세요.</p>
+    </section>
+  </main>
+  <footer><span>실제 접촉 지점과 방향 · 가볍게 튀는 선 · 투명도 없이 짧아지는 마무리</span><span>LOCAL BOUNCE PREVIEW</span></footer>
+</body>
+</html>

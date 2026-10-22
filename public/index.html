@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#f8f7f3" />
     <meta name="description" content="power0802m.com, 조만간 업데이트될 예정입니다..!" />
-    <title>공간을 만드는 중 · power0802m.com</title>
+    <title>power0802m 의 공간</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="preload" href="/fonts/sb-aggro-light.ttf" as="font" type="font/ttf" crossorigin />
     <link rel="stylesheet" href="/styles.css" />
@@ -14,6 +14,7 @@
     <script src="/app.js" defer></script>
     <script src="/game.js" type="module"></script>
     <script src="/card.js" type="module"></script>
+    <script src="/effect-trial.js" type="module"></script>
   </head>
   <body>
     <header class="site-header">
@@ -44,7 +45,7 @@
     <footer class="site-footer">
       <span class="contact-email">power0802m@naver.com</span>
       <span class="footer-divider" aria-hidden="true">·</span>
-      <span class="site-version">v0.0.16</span>
+      <span class="site-version">v0.0.37</span>
     </footer>
     <div class="physics-card-layer">
       <article id="physics-card" class="physics-card" data-physics-card tabindex="0"
@@ -62,6 +63,7 @@
     </div>
     <div id="game-score" class="game-score" aria-hidden="true" hidden><div class="score-window"></div></div>
     <div id="game-score-on-ball" class="game-score game-score-on-ball" aria-hidden="true" hidden><div class="score-window"></div></div>
+    <div id="impact-scores" aria-hidden="true"></div>
     <svg class="game-clip-defs" width="0" height="0" aria-hidden="true">
       <defs>
         <clipPath id="score-ball-clip" clipPathUnits="userSpaceOnUse"><path id="score-ball-clip-path" /></clipPath>

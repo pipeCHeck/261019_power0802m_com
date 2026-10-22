@@ -13,6 +13,9 @@ export class PhysicsCard {
     this.mass = 12;
     this.sleeping = false;
     this.restTime = 0;
+    this.time = 0;
+    this.floorImpacts = [];
+    this.lastFloorImpact = -Infinity;
     this.resize(width, height);
   }
 
@@ -28,8 +31,28 @@ export class PhysicsCard {
 
   wake() { this.sleeping = false; this.restTime = 0; }
 
+  drainFloorImpacts() {
+    const impacts = this.floorImpacts;
+    this.floorImpacts = [];
+    return impacts;
+  }
+
+  recordFloorImpact(contacts, normalSpeed, tangentSpeed, angularSpeed = this.body.angularVelocity) {
+    // Ignore support impulses and merge the solver's rapid repeated contacts.
+    if (normalSpeed < 120 || this.time - this.lastFloorImpact < .065 || !contacts.length) return;
+    const left = Math.min(...contacts.map(p => p.x));
+    const right = Math.max(...contacts.map(p => p.x));
+    const x = (left + right) / 2, rx = x - this.body.x;
+    const effectiveMass = this.mass / (1 + rx * rx / this.inertia);
+    this.floorImpacts.push({ x, y: this.floor, span: right - left, angle: this.body.angle,
+      normalSpeed, tangentSpeed, angularSpeed, energy: .5 * effectiveMass * normalSpeed ** 2 });
+    if (this.floorImpacts.length > 16) this.floorImpacts.shift();
+    this.lastFloorImpact = this.time;
+  }
+
   resize(width, height) {
     if (this.drag) this.endDrag({ throwing: false });
+    this.floorImpacts = [];
     const ratio = this.displayX / this.viewportWidth;
     this.viewportWidth = Math.max(1, width);
     this.viewportHeight = Math.max(1, height);
@@ -124,6 +147,7 @@ export class PhysicsCard {
     const ry = bottom - b.y;
     b.y += this.floor - bottom;
     const velocity = b.vy + b.angularVelocity * rx;
+    this.recordFloorImpact(contacts, velocity, b.vx - b.angularVelocity * ry);
     let impulse = 0;
     if (velocity > 0) {
       const restitution = velocity > 140 ? .18 : 0;
@@ -168,6 +192,7 @@ export class PhysicsCard {
       targetY = Math.min(drag.y, this.floorPivotLimit(b.angle));
     }
     for (let i = 1; i <= steps; i++) {
+      this.time += dt;
       if (drag) {
         const previousX = b.x, previousY = b.y;
         const pointerX = startX + (drag.x - startX) * i / steps;
@@ -209,12 +234,19 @@ export class PhysicsCard {
           * (1 - Math.exp(-8 * turnStrength * dt));
         b.angularVelocity *= Math.exp(-drag.gripDamping * dt);
         b.angularVelocity = clamp(b.angularVelocity, -12, 12);
+        const incomingSpin = b.angularVelocity;
         b.angle = this.constrainPinnedAngle(b.angle + b.angularVelocity * dt, pointerY);
         const nextRx = Math.cos(b.angle) * drag.localX - Math.sin(b.angle) * drag.localY;
         const nextRy = Math.sin(b.angle) * drag.localX + Math.cos(b.angle) * drag.localY;
         b.x = pointerX - nextRx;
         b.y = pointerY - nextRy;
         this.containVertically();
+        const contacts = this.corners.filter(p => p.y >= this.floor - .5);
+        if (contacts.length) {
+          const contactX = contacts.reduce((sum, p) => sum + p.x, 0) / contacts.length;
+          this.recordFloorImpact(contacts, vy + incomingSpin * (contactX - b.x - nextRx),
+            vx - incomingSpin * (this.floor - b.y - nextRy), incomingSpin);
+        }
         // Collision and release velocities follow actual material motion,
         // including a hand stopped by the floor, rather than raw mouse speed.
         b.vx = clamp((b.x - previousX) / dt, -2800, 2800);
